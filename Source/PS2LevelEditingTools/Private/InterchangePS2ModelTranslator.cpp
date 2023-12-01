@@ -12,6 +12,8 @@
 #include "Materials/Material.h"
 #include "PS2LevelEditingDeveloperSettings.h"
 
+#include "meshoptimizer.h"
+
 #include "egg/mesh_header.hpp"
 
 UInterchangePS2ModelTranslator::UInterchangePS2ModelTranslator(const FObjectInitializer& ObjectInitializer)
@@ -78,10 +80,51 @@ TFuture<TOptional<UE::Interchange::FMeshPayloadData>> UInterchangePS2ModelTransl
 
 			FMeshPayloadData Payload;
 
-			//TArray<FVector3f> Positions;
-			//TArray<FVector2f> UVs;
-			//TArray<FVector3f> Normals;
-			//TArray<FVector4f> Colors;
+			TArray<uint32> OutputIndicies;
+			{
+				// Unstrippify
+				TArray<uint32> InputIndicies;
+				InputIndicies.SetNum(MeshHeader->pos.num_elements());
+				for (size_t i = 0; i < MeshHeader->pos.num_elements(); ++i)
+				{
+					InputIndicies[i] = i;
+				}
+				OutputIndicies.SetNumZeroed(meshopt_unstripifyBound(MeshHeader->pos.num_elements()));
+				OutputIndicies.SetNum(meshopt_unstripify(OutputIndicies.GetData(), InputIndicies.GetData(), InputIndicies.Num(), 0));
+
+				// Remap indices
+				//TArray<uint32> Remap;
+				//Remap.SetNum(OutputIndicies.Num());
+
+				//struct Vertex
+				//{
+				//	Vector pos;
+				//	Vector nrm;
+				//	Vector2 uvs;
+				//	Vector colors;
+				//};
+
+				//TArray<Vertex> Vertices;
+				//Vertices.SetNumZeroed(MeshHeader->pos.num_elements());
+				//for (size_t i = 0; i < MeshHeader->pos.num_elements(); ++i)
+				//{
+				//	Vertex& NewVertex = Vertices[i];
+				//	NewVertex.pos = MeshHeader->pos[i];
+				//	NewVertex.nrm = MeshHeader->nrm[i];
+				//	NewVertex.uvs = MeshHeader->uvs[i];
+				//	NewVertex.colors = MeshHeader->colors[i];
+				//}
+
+				//size_t total_vertices = meshopt_generateVertexRemap(Remap.GetData(), OutputIndicies.GetData(), OutputIndicies.Num(), Vertices.GetData(), Vertices.Num(), sizeof(Vertex));
+
+				//OutputIndicies.SetNum(total_indices);
+				//meshopt_remapIndexBuffer(&result.indices[0], NULL, total_indices, &remap[0]);
+
+				//result.vertices.resize(total_vertices);
+				//meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
+			}
+
+
 
 			FMeshDescription& MeshDescription = Payload.MeshDescription;
 			FStaticMeshAttributes Attributes(MeshDescription);
@@ -99,12 +142,6 @@ TFuture<TOptional<UE::Interchange::FMeshPayloadData>> UInterchangePS2ModelTransl
 				Position = static_cast<FVector3f>(TransformedPosition);
 			};
 			
-			{
-				UInterchangeResultDisplay_Generic* Result = AddMessage<UInterchangeResultDisplay_Generic>();
-				Result->SourceAssetName = FPaths::GetBaseFilename(GetSourceData()->GetFilename());
-				Result->Text = NSLOCTEXT("InterchangePS2Translator", "ImportingVertices", "Importing vertices...");
-			}
-
 			TVertexAttributesRef<FVector3f> MeshPositions = Attributes.GetVertexPositions();
 			MeshDescription.ReserveNewVertices(MeshHeader->pos.num_elements());
 			for (Vector pos : MeshHeader->pos)
@@ -119,12 +156,6 @@ TFuture<TOptional<UE::Interchange::FMeshPayloadData>> UInterchangePS2ModelTransl
 				}
 			}
 
-			{
-				UInterchangeResultDisplay_Generic* Result = AddMessage<UInterchangeResultDisplay_Generic>();
-				Result->SourceAssetName = FPaths::GetBaseFilename(GetSourceData()->GetFilename());
-				Result->Text = NSLOCTEXT("InterchangePS2Translator", "ImportingUVs", "Importing UVs...");
-			}
-
 			// Create UVs and initialize values
 			MeshDescription.SetNumUVChannels(1);
 			MeshDescription.ReserveNewUVs(1);
@@ -136,7 +167,7 @@ TFuture<TOptional<UE::Interchange::FMeshPayloadData>> UInterchangePS2ModelTransl
 			}
 
 			FPolygonGroupID PolygonGroupIndex = MeshDescription.CreatePolygonGroup();
-			const FString MaterialName = UMaterial::GetDefaultMaterial(MD_Surface)->GetName();
+			const FString MaterialName = UPS2LevelEditingDeveloperSettings::Get()->ModelMaterial.GetAssetName();
 			ensure(!MaterialName.IsEmpty());
 
 			Attributes.GetPolygonGroupMaterialSlotNames()[PolygonGroupIndex] = FName(MaterialName);
@@ -145,41 +176,82 @@ TFuture<TOptional<UE::Interchange::FMeshPayloadData>> UInterchangePS2ModelTransl
 			MeshDescription.ReserveNewPolygons(MeshHeader->pos.num_elements() - 2);
 
 			TArray<FVertexInstanceID, TInlineAllocator<3>> VertexInstanceIDs;
-			for (int32 i = 2; i < MeshHeader->pos.num_elements(); ++i)
+			for (int32 TriangleIndex = 0; TriangleIndex < (OutputIndicies.Num() / 3); ++TriangleIndex)
 			{
 				VertexInstanceIDs.Reset();
 				MeshDescription.ReserveNewVertexInstances(3);
 
-				for (int32 j = i; j >= (i - 2); --j)
+				for (int i = TriangleIndex * 3; i < ((TriangleIndex * 3) + 3); ++i)
 				{
-					FVertexID VertexID = j;
+					FVertexID VertexID = OutputIndicies[i];
 					FVertexInstanceID VertexInstanceID = MeshDescription.CreateVertexInstance(VertexID);
 					VertexInstanceIDs.Add(VertexInstanceID);
 
-					//if (VertexData.NormalIndex != INDEX_NONE && Normals.IsValidIndex(VertexData.NormalIndex))
-					//{
-					//	FVector3f& Normal = Attributes.GetVertexInstanceNormals()[VertexInstanceID];
-					//	Normal = PositionToUEBasis(Normals[VertexData.NormalIndex]);
-					//	TransformPosition(TotalMatrixForNormal, Normal);
-					//}
+					check(Attributes.GetVertexInstanceNormals().IsValid() && Attributes.GetVertexInstanceNormals().GetNumChannels() > 0);
 
 					FVector3f& Normal = Attributes.GetVertexInstanceNormals()[VertexInstanceID];
 					Normal = PositionToUEBasis(MeshHeader->nrm[VertexID]);
+					Normal.Z *= -1.f;
 					TransformPosition(MeshGlobalTransform.ToMatrixNoScale(), Normal);
-						
-					//if (VertexData.UVIndex != INDEX_NONE && UVs.IsValidIndex(VertexData.UVIndex))
-					//{
-					//	Attributes.GetVertexInstanceUVs()[VertexInstanceID] = UVToUEBasis(UVs[VertexData.UVIndex]);
-					//}
-				}
 
-				// Reverse every other triangle in the vertex list to flip mapping
-				if (i % 2 == 1)
-				{
-					Algo::Reverse(VertexInstanceIDs);
+					FVector4f& Color = Attributes.GetVertexInstanceColors()[VertexInstanceID];
+					Color.X = FMath::Pow(MeshHeader->colors[VertexID].x, 2.2);
+					Color.Y = FMath::Pow(MeshHeader->colors[VertexID].y, 2.2);
+					Color.Z = FMath::Pow(MeshHeader->colors[VertexID].z, 2.2);
+					Color.W = FMath::Pow(MeshHeader->colors[VertexID].w, 2.2);
+
+					FVector2f& UVs = Attributes.GetVertexInstanceUVs()[VertexInstanceID];
+					UVs.X = MeshHeader->uvs[VertexID].x;
+					UVs.Y = MeshHeader->uvs[VertexID].y;
 				}
 
 				MeshDescription.CreatePolygon(PolygonGroupIndex, VertexInstanceIDs);
+			}
+
+			MeshDescription.ResumeEdgeIndexing();
+
+			for (const FEdgeID& EdgeID : MeshDescription.Edges().GetElementIDs())
+			{
+				// Don't look at internal edges (edges within a polygon which break it into triangles)
+				if (!MeshDescription.IsEdgeInternal(EdgeID))
+				{
+					Attributes.GetEdgeHardnesses()[EdgeID] = false;
+
+					//bool bAllNormalsEqual = true;
+					//TArray<FPolygonID, TInlineAllocator<2>> EdgePolygonIDs = MeshDescription.GetEdgeConnectedPolygons<TInlineAllocator<2>>(EdgeID);
+
+					//for (const FVertexID& EdgeVertexID : MeshDescription.GetEdgeVertices(EdgeID))
+					//{
+					//	if (bAllNormalsEqual)
+					//	{
+					//		// This is the vertex index as it appears in the .obj
+					//		int32 ObjVertexIndex = OutputIndicies[EdgeVertexID];
+
+					//		// For the vertex we are considering, look at the first face adjacent to the edge, and find the vertex data which includes it
+					//		// This is a baseline we will use to compare all the other adjacent faces
+					//		const FVertexData& VertexData = Polygons[EdgePolygonIDs[0]]->GetVertexDataContainingVertexIndex(ObjVertexIndex);
+
+					//		for (int32 Index = 1; Index < EdgePolygonIDs.Num(); Index++)
+					//		{
+					//			// For all other adjacent faces, find the vertex data which includes the vertex we are considering.
+					//			// If the normal index is not the same as the baseline, we know this must be a hard edge.
+					//			const FVertexData& VertexDataToCompare = Polygons[EdgePolygonIDs[Index]]->GetVertexDataContainingVertexIndex(ObjVertexIndex);
+
+					//			if (VertexData.NormalIndex != VertexDataToCompare.NormalIndex)
+					//			{
+					//				bAllNormalsEqual = false;
+					//				break;
+					//			}
+					//		}
+					//	}
+					//}
+
+					//if (!bAllNormalsEqual)
+					//{
+					//	Attributes.GetEdgeHardnesses()[EdgeID] = false;
+					//}
+
+				}
 			}
 
 			MeshDescription.ResumeVertexInstanceIndexing();

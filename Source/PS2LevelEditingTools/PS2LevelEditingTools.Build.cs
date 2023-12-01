@@ -22,7 +22,10 @@ public class PS2LevelEditingTools : ModuleRules
 				"InterchangeNodes",
 				"MeshDescription",
                 "StaticMeshDescription",
+				"Slate",
+				"SlateCore",
 
+				"MeshOptimizer",
                 "PS2LevelEditingToolsLibrary"
 			}
 		);

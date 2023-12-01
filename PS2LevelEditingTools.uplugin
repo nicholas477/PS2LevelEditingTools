@@ -10,7 +10,7 @@
 	"DocsURL": "",
 	"MarketplaceURL": "",
 	"SupportURL": "",
-	"CanContainContent": true,
+	"CanContainContent": false,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
 	"Installed": false,
@@ -18,7 +18,17 @@
 		{
 			"Name": "PS2LevelEditingTools",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"InterchangeImport",
+				"InterchangeNodes"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Interchange",
+			"Enabled": true
 		}
 	]
 }
