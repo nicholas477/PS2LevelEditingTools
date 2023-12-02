@@ -88,23 +88,14 @@ static void CreateExportMapMenu(FMenuBuilder& MenuBuilder, const TArray<AActor*>
 {
 	FName ExtensionName = "LiveLinkSourceSubMenu";
 
-	//MenuBuilder.AddSubMenu(
-	//	NSLOCTEXT("TakeRecorderSources", "LiveLinkList_Label", "From LiveLink"),
-	//	NSLOCTEXT("TakeRecorderSources", "LiveLinkList_Tip", "Add a new recording source from a Live Link Subject"),
-	//	FNewMenuDelegate::CreateStatic(PopulateLiveLinkSubMenu, Sources),
-	//	FUIAction(),
-	//	ExtensionName,
-	//	EUserInterfaceActionType::Button
-	//);
-
 	MenuBuilder.AddMenuEntry(
 		LOCTEXT("ExportPS2Map", "Export PS2 Map"),
 		LOCTEXT("ExportPS2MapToolTip", "Exports the selected static meshes to a PS2 map."),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "MainFrame.OpenProject"),
 		FUIAction(
-			FExecuteAction::CreateLambda([]()
+			FExecuteAction::CreateLambda([SelectedActors]()
 				{
-					UE_LOG(LogPS2LevelEditingTools, Log, TEXT("Test!!!!!!"));
+					FPS2LevelEditingToolsModule::ExportMap(SelectedActors);
 				}
 			)
 		)

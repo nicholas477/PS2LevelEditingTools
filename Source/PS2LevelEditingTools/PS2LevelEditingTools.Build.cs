@@ -24,6 +24,7 @@ public class PS2LevelEditingTools : ModuleRules
                 "StaticMeshDescription",
 				"Slate",
 				"SlateCore",
+				"Foliage",
 
 				"MeshOptimizer",
                 "PS2LevelEditingToolsLibrary"
